@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Double Inverted Pendulum — Self-Balancing Cart</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #0A0E13;
+    --panel: #10161D;
+    --panel-line: #1E2830;
+    --text: #C9D3DB;
+    --text-dim: #5B6B78;
+    --accent: #E8A64C;
+    --accent-dim: #7A5A2C;
+    --ok: #6FCF97;
+    --bad: #E0665C;
+    --rail: #232E38;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0; padding:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    height: 100%;
+  }
+
+  .wrap{
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 28px 20px 40px;
+  }
+
+  header{
+    display:flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--panel-line);
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  header h1{
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0;
+    color: var(--text);
+  }
+
+  header .sub{
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.02em;
+    margin-top: 4px;
+  }
+
+  header .status{
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-align: right;
+  }
+
+  .dot{
+    display:inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    margin-right: 6px;
+    background: var(--ok);
+    box-shadow: 0 0 6px var(--ok);
+  }
+  .dot.fallen{ background: var(--bad); box-shadow: 0 0 6px var(--bad); }
+
+  .stage{
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 4px;
+    padding: 4px;
+  }
+
+  canvas{ display:block; width:100%; height:auto; border-radius: 3px; cursor: grab; }
+  canvas:active{ cursor: grabbing; }
+
+  .readout{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--panel-line);
+    border: 1px solid var(--panel-line);
+    margin-top: 1px;
+  }
+
+  .cell{
+    background: var(--panel);
+    padding: 10px 14px;
+  }
+
+  .cell .label{
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .cell .value{
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .cell .value.small{ font-size: 13px; color: var(--text); }
+
+  .controls{
+    margin-top: 18px;
+    display:flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  button{
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--panel-line);
+    border-radius: 3px;
+    padding: 9px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  button:hover{ border-color: var(--accent-dim); color: var(--accent); }
+  button:active{ transform: translateY(1px); }
+  button.primary{ border-color: var(--accent-dim); color: var(--accent); }
+  button:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .spacer{ flex: 1 1 auto; }
+
+  .slider-group{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+
+  input[type=range]{
+    width: 120px;
+    accent-color: var(--accent);
+  }
+
+  .modes{
+    display:flex;
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .modes button{ flex: 0 0 auto; }
+
+  .pidpanel{
+    margin-top: 10px;
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 4px;
+    padding: 14px 16px;
+    display: none;
+  }
+  .pidpanel.show{ display: block; }
+
+  .pidpanel .rowlabel{
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 12px 0 6px;
+  }
+  .pidpanel .rowlabel:first-child{ margin-top: 0; }
+
+  .pidrow{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .pidfield{
+    display:flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .pidfield label{
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.03em;
+  }
+  .pidfield input[type=number]{
+    font-family: inherit;
+    font-size: 13px;
+    background: var(--bg);
+    border: 1px solid var(--panel-line);
+    color: var(--accent);
+    border-radius: 3px;
+    padding: 7px 8px;
+    width: 100%;
+  }
+  .pidfield input[type=number]:focus{
+    outline: 1px solid var(--accent-dim);
+  }
+
+  .pidactions{
+    display:flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .trace{
+    margin-top: 18px;
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 4px;
+    padding: 10px 12px 6px;
+  }
+
+  .trace .label{
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    display:flex;
+    justify-content: space-between;
+  }
+
+  .legend span{ margin-left: 14px; }
+  .legend .sw{
+    display:inline-block; width:8px; height:8px; border-radius:1px; margin-right:5px;
+  }
+
+  footer{
+    margin-top: 22px;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--text-dim);
+    border-top: 1px solid var(--panel-line);
+    padding-top: 14px;
+  }
+  footer b{ color: var(--text); font-weight: 600; }
+  footer code{ color: var(--accent); }
+
+  @media (max-width: 640px){
+    .readout{ grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Double Inverted Pendulum</h1>
+      <div class="sub">Cart + two-link pendulum · real Lagrangian dynamics · state-feedback balancing</div>
+    </div>
+    <div class="status">
+      <span id="statusDot" class="dot"></span><span id="statusText">BALANCED</span>
+    </div>
+  </header>
+
+  <div class="stage">
+    <canvas id="canvas" width="960" height="420"></canvas>
+  </div>
+
+  <div class="readout">
+    <div class="cell">
+      <div class="label">Link 1 angle</div>
+      <div class="value" id="th1val">0.00°</div>
+    </div>
+    <div class="cell">
+      <div class="label">Link 2 angle</div>
+      <div class="value" id="th2val">0.00°</div>
+    </div>
+    <div class="cell">
+      <div class="label">Cart position</div>
+      <div class="value small" id="xval">0.00 m</div>
+    </div>
+    <div class="cell">
+      <div class="label">Control force</div>
+      <div class="value small" id="uval">0.0 N</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="btnController">Controller: ON</button>
+    <button id="btnReset">Reset upright</button>
+    <button id="btnKickL">Kick ← </button>
+    <button id="btnKickR">Kick →</button>
+    <button id="btnDrop">Drop from tilt</button>
+    <div class="spacer"></div>
+    <div class="slider-group" id="gainGroup">
+      Gain <input type="range" id="gainSlider" min="0" max="180" value="100">
+      <span id="gainLabel">1.00×</span>
+    </div>
+  </div>
+
+  <div class="modes">
+    <button class="primary" id="modeAuto">Mode: Reference controller</button>
+    <button id="modeManual">Mode: Manual PID</button>
+  </div>
+
+  <div class="pidpanel" id="pidPanel">
+    <div class="rowlabel">Link 1 (lower pendulum) — error = angle from upright</div>
+    <div class="pidrow">
+      <div class="pidfield"><label>Kp1</label><input type="number" id="kp1" step="1" value="0"></div>
+      <div class="pidfield"><label>Ki1</label><input type="number" id="ki1" step="0.5" value="0"></div>
+      <div class="pidfield"><label>Kd1</label><input type="number" id="kd1" step="1" value="0"></div>
+    </div>
+
+    <div class="rowlabel">Link 2 (upper pendulum) — error = angle from upright</div>
+    <div class="pidrow">
+      <div class="pidfield"><label>Kp2</label><input type="number" id="kp2" step="1" value="0"></div>
+      <div class="pidfield"><label>Ki2</label><input type="number" id="ki2" step="0.5" value="0"></div>
+      <div class="pidfield"><label>Kd2</label><input type="number" id="kd2" step="1" value="0"></div>
+    </div>
+
+    <div class="rowlabel">Cart — error = distance from track center</div>
+    <div class="pidrow">
+      <div class="pidfield"><label>Kpx</label><input type="number" id="kpx" step="0.5" value="0"></div>
+      <div class="pidfield"><label>Kix</label><input type="number" id="kix" step="0.1" value="0"></div>
+      <div class="pidfield"><label>Kdx</label><input type="number" id="kdx" step="0.5" value="0"></div>
+    </div>
+
+    <div class="pidactions">
+      <button id="btnLoadRef">Load reference gains</button>
+      <button id="btnClearPid">Clear all to 0</button>
+    </div>
+  </div>
+
+  <div class="trace">
+    <div class="label">
+      <span>ANGLE TRACE — LAST 8s</span>
+      <span class="legend">
+        <span><span class="sw" style="background:#E8A64C"></span>link 1</span>
+        <span><span class="sw" style="background:#6FA8DC"></span>link 2</span>
+      </span>
+    </div>
+    <canvas id="trace" width="960" height="90"></canvas>
+  </div>
+
+  <footer>
+    <b>What this is:</b> a cart that can only push itself left/right, carrying two pendulum links joined end to end.
+    Left alone, it's chaotic and falls — same class of problem as balancing a broom on your palm, except now the broom
+    has an elbow. The equations of motion are derived from the actual Lagrangian of the system (mass matrix, Coriolis
+    and gravity terms, solved every physics step), not a canned animation. The controller reads all six state
+    variables (cart position/velocity, both angles, both angular velocities) and computes a single push force —
+    gains found by solving the linear-quadratic regulator for this system rather than hand-tuned — that's the
+    <b>Reference controller</b> mode. Switch to <b>Manual PID</b> to type in your own Kp/Ki/Kd for each link and
+    the cart, all starting at zero, and watch it fall until you find gains that work. <b>Load reference gains</b>
+    fills the fields with the same numbers the reference controller uses, re-expressed as three per-joint PID
+    terms, so you can see what "correct" looks like and perturb from there. Click and drag the top bob to disturb
+    it mid-simulation, or use <code>Kick</code> for a clean impulse. Push it too far and it'll fall — that's real,
+    not scripted.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  // ---------- physical parameters (match the derivation) ----------
+  const m0 = 2.0, m1 = 0.5, m2 = 0.3;
+  const L1 = 1.0, L2 = 0.8;
+  const g  = 9.81;
+  const b0 = 0.8, b1 = 0.06, b2 = 0.04; // damping (cart friction, joint friction)
+
+  const A = m0 + m1 + m2;
+  const B = (m1 + m2) * L1 * L1;
+  const C = m2 * L2 * L2;
+  const D = (m1 + m2) * L1;
+  const E = m2 * L2;
+  const F = m2 * L1 * L2;
+
+  // LQR gains solved offline for the linearized system around upright.
+  // u = -(K . [x, th1, th2, xdot, th1dot, th2dot])
+  const K = [4.47213596, -465.16510238, 602.40521961, 13.04502587, -32.76489613, 137.30101604];
+
+  const CART_LIMIT = 2.6;   // meters, soft rail limits
+  const FORCE_MAX = 220;    // N, actuator saturation
+
+  // ---------- state ----------
+  let state = { x:0, th1: 0.03, th2: -0.02, xdot:0, th1dot:0, th2dot:0 };
+  let controllerOn = true;
+  let gain = 1.0;
+  let fallen = false;
+  let lastU = 0;
+  let mode = 'auto'; // 'auto' | 'manual'
+
+  // manual PID gains, entered by the user
+  let pid = { kp1:0, ki1:0, kd1:0, kp2:0, ki2:0, kd2:0, kpx:0, kix:0, kdx:0 };
+  // reference gains = the LQR solution re-expressed as per-joint P/D terms, for comparison
+  const REF_GAINS = { kp1: 465.17, ki1: 0, kd1: 32.76, kp2: -602.41, ki2: 0, kd2: -137.30, kpx: -4.47, kix: 0, kdx: -13.05 };
+  const INTEGRAL_CLAMP = 8;
+  let integ1 = 0, integ2 = 0, integX = 0;
+
+  function solve3(Mm, rhs){
+    // Cramer's rule, 3x3
+    function det3(m){
+      return m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])
+           - m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])
+           + m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+    }
+    const d = det3(Mm);
+    const out = [0,0,0];
+    for(let c=0;c<3;c++){
+      const Mc = Mm.map(r=>r.slice());
+      for(let r=0;r<3;r++) Mc[r][c] = rhs[r];
+      out[c] = det3(Mc)/d;
+    }
+    return out;
+  }
+
+  function derivatives(s, u){
+    const {th1, th2, xdot, th1dot, th2dot} = s;
+    const c1 = Math.cos(th1), s1 = Math.sin(th1);
+    const c2 = Math.cos(th2), s2 = Math.sin(th2);
+    const c12 = Math.cos(th1-th2), s12 = Math.sin(th1-th2);
+
+    const Mm = [
+      [A,        D*c1,     E*c2],
+      [D*c1,     B,        F*c12],
+      [E*c2,     F*c12,    C]
+    ];
+
+    const rhs = [
+      u - b0*xdot + D*s1*th1dot*th1dot + E*s2*th2dot*th2dot,
+      D*g*s1 - F*s12*th2dot*th2dot - b1*th1dot,
+      E*g*s2 + F*s12*th1dot*th1dot - b2*th2dot
+    ];
+
+    const [xddot, th1ddot, th2ddot] = solve3(Mm, rhs);
+    return { xdot: xdot, th1dot: th1dot, th2dot: th2dot, xddot, th1ddot, th2ddot };
+  }
+
+  function computeU(s, dt){
+    if(!controllerOn) return 0;
+
+    if(mode === 'auto'){
+      const raw = -(K[0]*s.x + K[1]*s.th1 + K[2]*s.th2 + K[3]*s.xdot + K[4]*s.th1dot + K[5]*s.th2dot);
+      return Math.max(-FORCE_MAX, Math.min(FORCE_MAX, raw*gain));
+    }
+
+    // manual mode: three independent PID loops, summed onto the one actuator
+    integ1 += s.th1*dt; integ1 = Math.max(-INTEGRAL_CLAMP, Math.min(INTEGRAL_CLAMP, integ1));
+    integ2 += s.th2*dt; integ2 = Math.max(-INTEGRAL_CLAMP, Math.min(INTEGRAL_CLAMP, integ2));
+    const cartAtRightWall = s.x >= CART_LIMIT - 0.002;
+    const cartAtLeftWall  = s.x <= -CART_LIMIT + 0.002;
+    if(!(cartAtRightWall && s.x > 0) && !(cartAtLeftWall && s.x < 0)){
+      integX += s.x*dt;
+      integX = Math.max(-INTEGRAL_CLAMP, Math.min(INTEGRAL_CLAMP, integX));
+    }
+
+    const u1 = pid.kp1*s.th1 + pid.ki1*integ1 + pid.kd1*s.th1dot;
+    const u2 = pid.kp2*s.th2 + pid.ki2*integ2 + pid.kd2*s.th2dot;
+    const ux = pid.kpx*s.x   + pid.kix*integX + pid.kdx*s.xdot;
+
+    const raw = u1 + u2 + ux;
+    return Math.max(-FORCE_MAX, Math.min(FORCE_MAX, raw));
+  }
+
+  function step(dt, extraForce){
+    let u = computeU(state, dt) + (extraForce||0);
+
+    // don't let the controller keep shoving into a wall it's already touching —
+    // that's what was causing the violent slamming once it hit the rail limits
+    const atRightWall = state.x >= CART_LIMIT - 0.002;
+    const atLeftWall  = state.x <= -CART_LIMIT + 0.002;
+    if(atRightWall && u > 0) u = 0;
+    if(atLeftWall  && u < 0) u = 0;
+
+    lastU = u;
+
+    // RK4
+    function f(s){
+      const d = derivatives(s, u);
+      return d;
+    }
+    function addScaled(s, d, h){
+      return {
+        x: s.x + h*d.xdot,
+        th1: s.th1 + h*d.th1dot,
+        th2: s.th2 + h*d.th2dot,
+        xdot: s.xdot + h*d.xddot,
+        th1dot: s.th1dot + h*d.th1ddot,
+        th2dot: s.th2dot + h*d.th2ddot
+      };
+    }
+    const k1 = f(state);
+    const k2 = f(addScaled(state, k1, dt/2));
+    const k3 = f(addScaled(state, k2, dt/2));
+    const k4 = f(addScaled(state, k3, dt));
+
+    state = {
+      x:      state.x      + dt/6*(k1.xdot   + 2*k2.xdot   + 2*k3.xdot   + k4.xdot),
+      th1:    state.th1    + dt/6*(k1.th1dot + 2*k2.th1dot + 2*k3.th1dot + k4.th1dot),
+      th2:    state.th2    + dt/6*(k1.th2dot + 2*k2.th2dot + 2*k3.th2dot + k4.th2dot),
+      xdot:   state.xdot   + dt/6*(k1.xddot  + 2*k2.xddot  + 2*k3.xddot  + k4.xddot),
+      th1dot: state.th1dot + dt/6*(k1.th1ddot+ 2*k2.th1ddot+ 2*k3.th1ddot+ k4.th1ddot),
+      th2dot: state.th2dot + dt/6*(k1.th2ddot+ 2*k2.th2ddot+ 2*k3.th2ddot+ k4.th2ddot)
+    };
+
+    // soft rail walls
+    if(state.x > CART_LIMIT){ state.x = CART_LIMIT; state.xdot = Math.min(0,state.xdot); }
+    if(state.x < -CART_LIMIT){ state.x = -CART_LIMIT; state.xdot = Math.max(0,state.xdot); }
+
+    const norm = a => Math.atan2(Math.sin(a), Math.cos(a));
+    fallen = Math.abs(norm(state.th1)) > 1.15 || Math.abs(norm(state.th2)) > 1.4;
+  }
+
+  // ---------- rendering ----------
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const PX_PER_M = 130;
+  const originX = W/2, originY = 150;
+
+  function toPx(mx){ return originX + mx*PX_PER_M; }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+
+    // rail
+    ctx.strokeStyle = '#232E38';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(toPx(-CART_LIMIT-0.3), originY+34);
+    ctx.lineTo(toPx(CART_LIMIT+0.3), originY+34);
+    ctx.stroke();
+
+    // tick marks
+    ctx.strokeStyle = '#1A222A';
+    ctx.lineWidth = 1;
+    for(let m=-2; m<=2; m+=0.5){
+      const px = toPx(m);
+      ctx.beginPath(); ctx.moveTo(px, originY+30); ctx.lineTo(px, originY+38); ctx.stroke();
+    }
+
+    const cartX = toPx(state.x);
+    const cartW = 78, cartH = 40;
+
+    const j1x = cartX + Math.sin(state.th1)*L1*PX_PER_M;
+    const j1y = originY - Math.cos(state.th1)*L1*PX_PER_M;
+    const j2x = j1x + Math.sin(state.th2)*L2*PX_PER_M;
+    const j2y = j1y - Math.cos(state.th2)*L2*PX_PER_M;
+
+    // control-force indicator arrow above cart
+    if(Math.abs(lastU) > 1){
+      const dir = Math.sign(lastU);
+      const len = Math.min(70, Math.abs(lastU)*0.35);
+      ctx.strokeStyle = fallen ? '#E0665C' : '#E8A64C';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cartX, originY-46);
+      ctx.lineTo(cartX+dir*len, originY-46);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cartX+dir*len, originY-46);
+      ctx.lineTo(cartX+dir*len-dir*8, originY-51);
+      ctx.lineTo(cartX+dir*len-dir*8, originY-41);
+      ctx.closePath();
+      ctx.fillStyle = fallen ? '#E0665C' : '#E8A64C';
+      ctx.fill();
+    }
+
+    // links
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = fallen ? '#7A4540' : '#3E5568';
+    ctx.beginPath(); ctx.moveTo(cartX, originY); ctx.lineTo(j1x, j1y); ctx.stroke();
+    ctx.strokeStyle = fallen ? '#7A4540' : '#4C6478';
+    ctx.beginPath(); ctx.moveTo(j1x, j1y); ctx.lineTo(j2x, j2y); ctx.stroke();
+
+    // cart
+    ctx.fillStyle = '#151D25';
+    ctx.strokeStyle = '#2C3944';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, cartX-cartW/2, originY-cartH/2, cartW, cartH, 5);
+    ctx.fill(); ctx.stroke();
+    // wheels
+    ctx.fillStyle = '#0D1216';
+    [cartX-cartW/2+12, cartX+cartW/2-12].forEach(wx=>{
+      ctx.beginPath(); ctx.arc(wx, originY+cartH/2, 6, 0, Math.PI*2); ctx.fill();
+    });
+
+    // joint 1
+    ctx.fillStyle = '#0D1216';
+    ctx.beginPath(); ctx.arc(cartX, originY, 5, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#2C3944'; ctx.lineWidth=1.5; ctx.stroke();
+
+    // bob 1
+    ctx.beginPath(); ctx.arc(j1x, j1y, 9, 0, Math.PI*2);
+    ctx.fillStyle = fallen ? '#E0665C' : '#E8A64C';
+    ctx.fill();
+
+    // bob 2
+    ctx.beginPath(); ctx.arc(j2x, j2y, 9, 0, Math.PI*2);
+    ctx.fillStyle = fallen ? '#C97C74' : '#6FA8DC';
+    ctx.fill();
+  }
+
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  // ---------- angle trace ----------
+  const traceCanvas = document.getElementById('trace');
+  const tctx = traceCanvas.getContext('2d');
+  const TW = traceCanvas.width, TH = traceCanvas.height;
+  const HIST_SECONDS = 8;
+  let hist1 = [], hist2 = [];
+
+  function drawTrace(){
+    tctx.clearRect(0,0,TW,TH);
+    tctx.strokeStyle = '#1A222A';
+    tctx.lineWidth = 1;
+    tctx.beginPath(); tctx.moveTo(0, TH/2); tctx.lineTo(TW, TH/2); tctx.stroke();
+
+    function plot(hist, color){
+      tctx.strokeStyle = color;
+      tctx.lineWidth = 1.6;
+      tctx.beginPath();
+      const n = hist.length;
+      for(let i=0;i<n;i++){
+        const px = TW - (n-1-i)*(TW/ (HIST_SECONDS*60));
+        const py = TH/2 - hist[i]*(TH/2)/1.6;
+        if(i===0) tctx.moveTo(px,py); else tctx.lineTo(px,py);
+      }
+      tctx.stroke();
+    }
+    plot(hist1, '#E8A64C');
+    plot(hist2, '#6FA8DC');
+  }
+
+  // ---------- UI wiring ----------
+  const th1val = document.getElementById('th1val');
+  const th2val = document.getElementById('th2val');
+  const xval = document.getElementById('xval');
+  const uval = document.getElementById('uval');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const btnController = document.getElementById('btnController');
+  const gainSlider = document.getElementById('gainSlider');
+  const gainLabel = document.getElementById('gainLabel');
+
+  document.getElementById('btnReset').addEventListener('click', ()=>{
+    state = { x:0, th1: 0.03, th2: -0.02, xdot:0, th1dot:0, th2dot:0 };
+    hist1 = []; hist2 = [];
+    integ1 = 0; integ2 = 0; integX = 0;
+    fallen = false;
+  });
+
+  document.getElementById('btnKickL').addEventListener('click', ()=>{ pendingKick = -55; kickFrames = 6; });
+  document.getElementById('btnKickR').addEventListener('click', ()=>{ pendingKick = 55; kickFrames = 6; });
+
+  document.getElementById('btnDrop').addEventListener('click', ()=>{
+    state = { x:0, th1: 0.5, th2: -0.35, xdot:0, th1dot:0, th2dot:0 };
+    hist1 = []; hist2 = [];
+    integ1 = 0; integ2 = 0; integX = 0;
+    fallen = false;
+  });
+
+  btnController.addEventListener('click', ()=>{
+    controllerOn = !controllerOn;
+    btnController.textContent = 'Controller: ' + (controllerOn ? 'ON' : 'OFF');
+    btnController.classList.toggle('primary', controllerOn);
+  });
+
+  gainSlider.addEventListener('input', ()=>{
+    gain = gainSlider.value/100;
+    gainLabel.textContent = gain.toFixed(2)+'×';
+  });
+
+  const modeAuto = document.getElementById('modeAuto');
+  const modeManual = document.getElementById('modeManual');
+  const pidPanel = document.getElementById('pidPanel');
+  const gainGroup = document.getElementById('gainGroup');
+
+  function setMode(m){
+    mode = m;
+    integ1 = 0; integ2 = 0; integX = 0;
+    modeAuto.classList.toggle('primary', m==='auto');
+    modeManual.classList.toggle('primary', m==='manual');
+    pidPanel.classList.toggle('show', m==='manual');
+    gainGroup.style.display = m==='auto' ? 'flex' : 'none';
+  }
+  modeAuto.addEventListener('click', ()=> setMode('auto'));
+  modeManual.addEventListener('click', ()=> setMode('manual'));
+
+  const pidFieldIds = ['kp1','ki1','kd1','kp2','ki2','kd2','kpx','kix','kdx'];
+  const pidInputs = {};
+  pidFieldIds.forEach(id=>{
+    const el = document.getElementById(id);
+    pidInputs[id] = el;
+    el.addEventListener('input', ()=>{
+      pid[id] = parseFloat(el.value) || 0;
+    });
+  });
+
+  document.getElementById('btnLoadRef').addEventListener('click', ()=>{
+    pidFieldIds.forEach(id=>{
+      pid[id] = REF_GAINS[id];
+      pidInputs[id].value = REF_GAINS[id];
+    });
+  });
+
+  document.getElementById('btnClearPid').addEventListener('click', ()=>{
+    pidFieldIds.forEach(id=>{
+      pid[id] = 0;
+      pidInputs[id].value = 0;
+    });
+  });
+
+  let pendingKick = 0, kickFrames = 0;
+
+  // drag to disturb the top bob
+  let dragging = false;
+  canvas.addEventListener('mousedown', ()=>{ dragging = true; });
+  window.addEventListener('mouseup', ()=>{ dragging = false; });
+  canvas.addEventListener('mousemove', (e)=>{
+    if(!dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width/rect.width;
+    const mx = (e.clientX - rect.left)*scaleX;
+    const targetXm = (mx - originX)/PX_PER_M;
+    // gentle spring pull toward the mouse, applied as a disturbance to th2dot
+    const desiredTh2 = Math.max(-1.3, Math.min(1.3, (targetXm - state.x)/ (L1+L2)));
+    state.th2dot += (desiredTh2 - state.th2)*0.6;
+  });
+
+  // ---------- main loop ----------
+  const DT = 1/240;
+  const SUBSTEPS = 4;
+  let acc = 0;
+  let last = performance.now();
+
+  function frame(now){
+    let dtReal = (now-last)/1000;
+    last = now;
+    dtReal = Math.min(dtReal, 0.05);
+    acc += dtReal;
+
+    while(acc > DT){
+      let extra = 0;
+      if(kickFrames>0){ extra = pendingKick; kickFrames--; }
+      step(DT, extra);
+      acc -= DT;
+    }
+
+    hist1.push(state.th1); hist2.push(state.th2);
+    const maxLen = HIST_SECONDS*60;
+    if(hist1.length>maxLen) hist1.shift();
+    if(hist2.length>maxLen) hist2.shift();
+
+    th1val.textContent = (state.th1*180/Math.PI).toFixed(1)+'°';
+    th2val.textContent = (state.th2*180/Math.PI).toFixed(1)+'°';
+    xval.textContent = state.x.toFixed(2)+' m';
+    uval.textContent = lastU.toFixed(1)+' N';
+
+    statusDot.classList.toggle('fallen', fallen);
+    statusText.textContent = fallen ? 'FALLEN — press Reset' : (controllerOn ? 'BALANCED' : 'OPEN LOOP');
+
+    draw();
+    drawTrace();
+
+    requestAnimationFrame(frame);
+  }
+
+  gain = gainSlider.value/100;
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
